@@ -788,3 +788,180 @@ MOCK_LACTATE_THRESHOLD_RANGE = {
         {"from": "2024-01-15", "until": "2024-01-15", "series": "running", "value": 334.0, "updatedDate": "2024-01-15"},
     ],
 }
+
+# Nutrition
+MOCK_MEAL_DEFINITIONS = [
+    {"mealId": 645041, "mealName": "Breakfast", "displayOrder": 0, "startTime": "06:00:00", "endTime": "10:00:00"},
+    {"mealId": 645042, "mealName": "Lunch", "displayOrder": 1, "startTime": "11:00:00", "endTime": "14:00:00"},
+    {"mealId": 645043, "mealName": "Dinner", "displayOrder": 2, "startTime": "17:00:00", "endTime": "21:00:00"},
+    {"mealId": 645044, "mealName": "Snacks", "displayOrder": 3},
+]
+
+MOCK_NUTRITION_SETTINGS = {
+    "calorieGoal": 2200,
+    "weightChangeType": "MAINTAIN",
+    "autoCalorieAdjustment": True,
+    "regionCode": "DE",
+    "languageCode": "en",
+    "startingWeight": 72000,
+    "targetWeightGoal": 70000,
+    "macroGoals": {
+        "calories": 2200.0,
+        "protein": 120.0,
+        "fat": 73.0,
+        "carbs": 275.0,
+    },
+}
+
+MOCK_DAILY_NUTRITION_LOG = {
+    "mealDate": "2024-01-15",
+    "dayStartTime": "06:00:00",
+    "dayEndTime": "23:59:00",
+    "dailyNutritionGoals": {
+        "calories": 2200.0,
+        "protein": 120.0,
+        "fat": 73.0,
+        "carbs": 275.0,
+    },
+    "dailyNutritionContent": {
+        "calories": 1850.0,
+        "protein": 95.0,
+        "fat": 62.0,
+        "carbs": 220.0,
+    },
+    "mealDetails": [
+        {
+            "meal": {"mealId": 645041, "mealName": "Breakfast", "displayOrder": 0},
+            "mealNutritionContent": {"calories": 450.0, "protein": 25.0, "fat": 15.0, "carbs": 55.0},
+            "loggedFoods": [
+                {
+                    "logId": "abc123",
+                    "logTimestamp": "2024-01-15T07:30:00.000Z",
+                    "servingQty": 1.0,
+                    "foodMetaData": {
+                        "foodId": "5367",
+                        "foodName": "Oatmeal",
+                        "brandName": None,
+                        "source": "FATSECRET",
+                    },
+                    "selectedNutritionContent": {
+                        "servingId": "54047",
+                        "servingUnit": "cup",
+                        "calories": 150.0,
+                        "protein": 5.0,
+                        "fat": 3.0,
+                        "carbs": 27.0,
+                    },
+                },
+            ],
+        },
+        {
+            "meal": {"mealId": 645042, "mealName": "Lunch", "displayOrder": 1},
+            "mealNutritionContent": {"calories": 700.0, "protein": 40.0, "fat": 25.0, "carbs": 80.0},
+            "loggedFoods": [],
+        },
+    ],
+    "loggedFoodsWithServingSizes": [],
+}
+
+MOCK_FOOD_SEARCH_RESULTS = {
+    "results": [
+        {
+            "foodMetaData": {
+                "foodId": "5367",
+                "foodName": "Apple",
+                "foodType": "GENERIC",
+                "brandName": None,
+                "source": "FATSECRET",
+            },
+            "nutritionContents": [
+                {
+                    "servingId": "54047",
+                    "servingUnit": "medium",
+                    "numberOfUnits": 1.0,
+                    "calories": 95.0,
+                    "protein": 0.5,
+                    "fat": 0.3,
+                    "carbs": 25.0,
+                    "fiber": 4.4,
+                },
+            ],
+            "foodImages": [],
+            "isFavorite": False,
+        },
+    ],
+    "moreDataAvailable": True,
+}
+
+MOCK_RECENT_FOODS = {
+    "frequentFoods": [
+        {
+            "foodMetaData": {"foodId": "5367", "foodName": "Oatmeal", "source": "FATSECRET"},
+            "nutritionContents": [{"servingId": "54047", "servingUnit": "cup", "calories": 150.0}],
+            "foodImages": [],
+        },
+    ],
+    "recentFoods": [
+        {
+            "foodMetaData": {"foodId": "9999", "foodName": "Banana", "source": "FATSECRET"},
+            "nutritionContents": [{"servingId": "99001", "servingUnit": "medium", "calories": 105.0}],
+            "foodImages": [],
+        },
+    ],
+}
+
+MOCK_FAVORITE_FOODS = {
+    "consumables": [
+        {
+            "foodMetaData": {"foodId": "5367", "foodName": "Oatmeal", "source": "FATSECRET"},
+            "nutritionContents": [{"servingId": "54047", "servingUnit": "cup", "calories": 150.0}],
+            "foodImages": [],
+            "isFavorite": True,
+        },
+    ],
+    "hasMore": False,
+}
+
+MOCK_CUSTOM_FOODS = {
+    "customFoods": [
+        {
+            "foodMetaData": {"foodId": "custom1", "foodName": "My Protein Shake", "source": "GARMIN"},
+            "nutritionContents": [{"servingId": "cs1", "servingUnit": "SERVING", "calories": 200.0, "protein": 30.0}],
+            "foodImages": [],
+        },
+    ],
+    "moreDataAvailable": False,
+}
+
+MOCK_CUSTOM_FOOD_CREATED = {
+    "foodMetaData": {"foodId": "custom2", "foodName": "Test Food", "source": "GARMIN"},
+    "nutritionContents": [{"servingId": "cs2", "servingUnit": "G", "numberOfUnits": 100.0, "calories": 250.0}],
+    "foodImages": [],
+}
+
+MOCK_CUSTOM_MEALS = {
+    "customMeals": [
+        {
+            "foodMetaData": {"foodId": "meal1", "foodName": "Morning Bowl", "source": "GARMIN"},
+            "nutritionContents": [{"calories": 450.0, "protein": 25.0}],
+            "foodImages": [],
+        },
+    ],
+    "hasMore": False,
+}
+
+MOCK_CUSTOM_MEAL_CREATED = {
+    "customMealId": 12345,
+    "name": "Test Meal",
+    "isFavorite": False,
+    "status": 0,
+    "type": "MEAL",
+    "foods": [
+        {
+            "foodMetaData": {"foodId": "5367", "foodName": "Oatmeal", "source": "FATSECRET"},
+            "nutritionContents": [{"calories": 150.0}],
+            "foodImages": [],
+        },
+    ],
+    "contentSummary": {"calories": 150.0, "protein": 5.0},
+}
