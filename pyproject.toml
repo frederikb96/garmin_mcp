@@ -2,6 +2,9 @@
 requires = [ "hatchling",]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project]
 name = "garmin-mcp"
 version = "0.1.0"
@@ -13,7 +16,7 @@ dependencies = [
     "garminconnect==0.2.38",
     "requests==2.32.3",
     "mcp==1.3.0",
-    "garth>=0.6.0",
+    "garth @ git+https://github.com/frederikb96/garth.git@main",
 ]
 
 [project.scripts]
@@ -21,7 +24,7 @@ garmin-mcp = "garmin_mcp:main"
 garmin-mcp-auth = "garmin_mcp.auth_cli:main"
 
 [tool.uv]
-override-dependencies = ["garth>=0.6.0"]
+override-dependencies = ["garth @ git+https://github.com/frederikb96/garth.git@main"]
 dev-dependencies = [
     "pytest>=9.0.2",
     "pytest-asyncio>=0.25.2",
@@ -31,4 +34,3 @@ dev-dependencies = [
 
 [tool.uv.sources]
 garmin-mcp = { workspace = true }
-garth = { git = "https://github.com/frederikb96/garth.git", branch = "main" }
