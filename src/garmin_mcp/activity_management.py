@@ -8,6 +8,26 @@ from typing import Any, Dict, List, Optional, Union
 # The garmin_client will be set by the main file
 garmin_client = None
 
+# Output field -> Garmin keys that may carry it, in priority order. The detail
+# summary and the activity lists name some of these differently.
+BALANCE_FIELDS = {
+    "avg_ground_contact_balance_left_percent": (
+        "groundContactBalanceLeft", "avgGroundContactBalance", "groundContactBalance",
+    ),
+    "avg_vertical_ratio_percent": ("verticalRatio", "avgVerticalRatio"),
+    "avg_power_balance_left_percent": (
+        "leftBalance", "avgLeftBalance", "leftRightBalance", "powerBalanceLeft",
+    ),
+}
+
+
+def _balance_metrics(source):
+    """Pick the left/right balance and running dynamics values out of an activity dict"""
+    return {
+        name: next((source[k] for k in keys if source.get(k) is not None), None)
+        for name, keys in BALANCE_FIELDS.items()
+    }
+
 
 def configure(client):
     """Configure the module with the Garmin client instance"""
@@ -30,8 +50,12 @@ def register_tools(app):
         try:
             activities = garmin_client.get_activities_by_date(start_date, end_date, activity_type)
             if not activities:
-                return f"No activities found between {start_date} and {end_date}" + \
-                       (f" for activity type '{activity_type}'" if activity_type else "")
+                return json.dumps({
+                    "count": 0,
+                    "date_range": {"start": start_date, "end": end_date},
+                    "activity_type": activity_type or None,
+                    "activities": []
+                }, indent=2)
 
             # Curate the activity list
             curated = {
@@ -52,9 +76,10 @@ def register_tools(app):
                     "avg_hr_bpm": a.get('averageHR'),
                     "max_hr_bpm": a.get('maxHR'),
                     "steps": a.get('steps'),
+                    "elevation_gain_meters": a.get('elevationGain'),
+                    "elevation_loss_meters": a.get('elevationLoss'),
+                    **_balance_metrics(a),
                 }
-                # Remove None values
-                activity = {k: v for k, v in activity.items() if v is not None}
                 curated["activities"].append(activity)
 
             return json.dumps(curated, indent=2)
@@ -97,12 +122,13 @@ def register_tools(app):
                     "calories": a.get('calories'),
                     "avg_hr_bpm": a.get('averageHR'),
                     "steps": a.get('steps'),
+                    "elevation_gain_meters": a.get('elevationGain'),
+                    "elevation_loss_meters": a.get('elevationLoss'),
+                    **_balance_metrics(a),
                     "lap_count": a.get('lapCount'),
                     "moderate_intensity_minutes": a.get('moderateIntensityMinutes'),
                     "vigorous_intensity_minutes": a.get('vigorousIntensityMinutes'),
                 }
-                # Remove None values
-                activity = {k: v for k, v in activity.items() if v is not None}
                 curated["activities"].append(activity)
 
             return json.dumps(curated, indent=2)
@@ -159,7 +185,14 @@ def register_tools(app):
                 "avg_stride_length_cm": summary.get('strideLength'),
                 "avg_ground_contact_time_ms": summary.get('groundContactTime'),
                 "avg_vertical_oscillation_cm": summary.get('verticalOscillation'),
+                **_balance_metrics(summary),
                 "steps": summary.get('steps'),
+
+                # Elevation
+                "elevation_gain_meters": summary.get('elevationGain'),
+                "elevation_loss_meters": summary.get('elevationLoss'),
+                "max_elevation_meters": summary.get('maxElevation'),
+                "min_elevation_meters": summary.get('minElevation'),
 
                 # Power
                 "avg_power_watts": summary.get('averagePower'),
@@ -275,7 +308,17 @@ def register_tools(app):
 
     @app.tool()
     async def get_activity_weather(activity_id: int) -> str:
-        """Get weather data for an activity
+        """Get weather data for an activity.
+
+        Garmin's weather endpoint returns temperatures in Fahrenheit (from the
+        weather-station source) with no unit indicator, regardless of account
+        settings. This tool converts them to the account's display unit: metric
+        accounts get Celsius, statute_us accounts keep Fahrenheit. The
+        temperature_unit field ("F" or "C") states which unit was returned.
+
+        Wind speed, unlike temperature, is already returned in the account's
+        display unit (km/h for metric, mph for statute_us), so it is passed
+        through unconverted and labeled via the wind_speed_unit field.
 
         Args:
             activity_id: ID of the activity to retrieve weather data for
@@ -285,17 +328,61 @@ def register_tools(app):
             if not weather:
                 return f"No weather data found for activity with ID {activity_id}"
 
-            # Curate weather data
+            # Garmin's activity-weather endpoint returns temperatures in
+            # FAHRENHEIT (from the METAR/station source), regardless of the
+            # account's measurement system — the payload carries no unit field.
+            # (Confirmed: a metric account still gets °F here, e.g. temp 57.)
+            # So convert the raw Fahrenheit values to the account's display unit.
+            def _f_to_c(value):
+                return round((value - 32) * 5 / 9, 1) if value is not None else None
+
+            try:
+                unit_system = garmin_client.get_unit_system()
+            except Exception:
+                unit_system = None
+
+            raw_temp = weather.get('temp')
+            raw_apparent = weather.get('apparentTemp')
+            raw_dew = weather.get('dewPoint')
+
+            if unit_system is not None and unit_system != "statute_us":
+                # Metric (or non-US-statute) account → present in Celsius.
+                temp_unit = "C"
+                out_temp, out_apparent, out_dew = (
+                    _f_to_c(raw_temp), _f_to_c(raw_apparent), _f_to_c(raw_dew)
+                )
+            else:
+                # statute_us account (or unknown) → leave the raw Fahrenheit.
+                temp_unit = "F" if unit_system == "statute_us" else None
+                out_temp, out_apparent, out_dew = raw_temp, raw_apparent, raw_dew
+
+            # Wind, unlike temperature, IS already returned in the account's
+            # display unit (verified against a local weather station: metric
+            # accounts get km/h, not mph). So don't convert it — just label it.
+            wind_unit = "mph" if unit_system == "statute_us" else (
+                "km/h" if unit_system is not None else None
+            )
+
+            weather_type_dto = weather.get('weatherTypeDTO') or {}
+            station_dto = weather.get('weatherStationDTO') or {}
+
             curated = {
                 "activity_id": activity_id,
-                "temperature_celsius": weather.get('temp'),
-                "apparent_temperature_celsius": weather.get('apparentTemp'),
+                "temperature": out_temp,
+                "temperature_unit": temp_unit,
+                "apparent_temperature": out_apparent,
+                "dew_point": out_dew,
                 "humidity_percent": weather.get('relativeHumidity'),
-                "wind_speed_mps": weather.get('windSpeed'),
+                "wind_speed": weather.get('windSpeed'),
+                "wind_speed_unit": wind_unit,
                 "wind_direction_degrees": weather.get('windDirection'),
-                "weather_type": weather.get('weatherTypeDTO', {}).get('weatherTypeName'),
-                "weather_description": weather.get('weatherTypeDTO', {}).get('weatherTypeDesc'),
+                "wind_direction_compass": weather.get('windDirectionCompassPoint'),
+                "wind_gust": weather.get('windGust'),
+                "weather_type": weather_type_dto.get('weatherTypeName'),
+                "weather_description": weather_type_dto.get('desc') or weather_type_dto.get('weatherTypeDesc'),
                 "location": weather.get('issueLocation'),
+                "station_id": station_dto.get('id'),
+                "station_name": station_dto.get('name'),
                 "issue_time": weather.get('issueDate'),
             }
 
@@ -414,10 +501,11 @@ def register_tools(app):
                     "avg_hr_bpm": a.get('averageHR'),
                     "max_hr_bpm": a.get('maxHR'),
                     "steps": a.get('steps'),
+                    "elevation_gain_meters": a.get('elevationGain'),
+                    "elevation_loss_meters": a.get('elevationLoss'),
+                    **_balance_metrics(a),
                     "owner_display_name": a.get('ownerDisplayName'),
                 }
-                # Remove None values
-                activity = {k: v for k, v in activity.items() if v is not None}
                 curated["activities"].append(activity)
 
             return json.dumps(curated, indent=2)

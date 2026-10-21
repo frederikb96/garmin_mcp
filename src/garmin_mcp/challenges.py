@@ -267,7 +267,10 @@ def register_tools(app):
                     "type_id": type_id,
                     "value": formatted_value,
                     "raw_value": raw_value,
-                    "date": _format_timestamp(record.get("prStartTimeGMT")),
+                    "date": (
+                        _parse_iso_date(record.get("prStartTimeLocalFormatted"))
+                        or _format_timestamp(record.get("prStartTimeGmt"))
+                    ),
                 }
 
                 # Add activity info if available

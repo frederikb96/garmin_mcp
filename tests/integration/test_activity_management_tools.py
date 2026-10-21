@@ -3,6 +3,7 @@ Integration tests for activity_management module MCP tools
 
 Tests all 10 activity management tools using FastMCP integration with mocked Garmin API responses.
 """
+import json
 import pytest
 from unittest.mock import Mock
 from mcp.server.fastmcp import FastMCP
@@ -369,3 +370,99 @@ async def test_get_activity_not_found(app_with_activity_management, mock_garmin_
     # Verify helpful message is returned
     assert result is not None
     # Should indicate activity not found
+
+
+def _payload(result):
+    """Extract the JSON document a tool returned"""
+    content = result[0] if isinstance(result, tuple) else result
+    return json.loads(content[0].text)
+
+
+@pytest.mark.asyncio
+async def test_activity_lists_include_elevation_with_stable_keys(app_with_activity_management, mock_garmin_client):
+    """List tools report ascent/descent and keep the same keys for every row"""
+    mock_garmin_client.get_activities.return_value = [
+        {"activityId": 1, "activityType": {"typeKey": "hiking"}, "distance": 9000.0,
+         "elevationGain": 412.5, "elevationLoss": 398.0},
+        {"activityId": 2, "activityType": {"typeKey": "strength_training"}},
+    ]
+
+    data = _payload(await app_with_activity_management.call_tool("get_activities", {}))
+
+    hike, strength = data["activities"]
+    assert hike["elevation_gain_meters"] == 412.5
+    assert hike["elevation_loss_meters"] == 398.0
+    assert strength["distance_meters"] is None
+    assert hike.keys() == strength.keys()
+
+
+@pytest.mark.asyncio
+async def test_get_activity_includes_elevation(app_with_activity_management, mock_garmin_client):
+    """Activity detail reports ascent, descent and elevation extremes"""
+    mock_garmin_client.get_activity.return_value = {
+        "activityId": 1,
+        "summaryDTO": {"elevationGain": 412.5, "elevationLoss": 398.0,
+                       "minElevation": 120.0, "maxElevation": 310.2},
+    }
+
+    data = _payload(await app_with_activity_management.call_tool("get_activity", {"activity_id": 1}))
+
+    assert data["elevation_gain_meters"] == 412.5
+    assert data["elevation_loss_meters"] == 398.0
+    assert data["min_elevation_meters"] == 120.0
+    assert data["max_elevation_meters"] == 310.2
+
+
+@pytest.mark.asyncio
+async def test_get_activities_by_date_empty_range_is_json(app_with_activity_management, mock_garmin_client):
+    """An empty range returns the usual JSON shape with no activities"""
+    mock_garmin_client.get_activities_by_date.return_value = []
+
+    data = _payload(await app_with_activity_management.call_tool(
+        "get_activities_by_date", {"start_date": "2024-01-08", "end_date": "2024-01-15"}
+    ))
+
+    assert data["count"] == 0
+    assert data["activities"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_activity_weather_converts_fahrenheit(app_with_activity_management, mock_garmin_client):
+    """Garmin reports weather temperature in Fahrenheit; metric accounts get Celsius"""
+    mock_garmin_client.get_unit_system.return_value = "metric"
+    mock_garmin_client.get_activity_weather.return_value = {"temp": 37, "apparentTemp": 32, "windSpeed": 9}
+
+    data = _payload(await app_with_activity_management.call_tool("get_activity_weather", {"activity_id": 1}))
+
+    assert data["temperature"] == 2.8
+    assert data["temperature_unit"] == "C"
+    assert data["wind_speed_unit"] == "km/h"
+
+
+@pytest.mark.asyncio
+async def test_get_activity_includes_balance_metrics(app_with_activity_management, mock_garmin_client):
+    """Detail reports left/right balance and vertical ratio when Garmin provides them"""
+    mock_garmin_client.get_activity.return_value = {
+        "activityId": 1,
+        "summaryDTO": {"groundContactBalanceLeft": 50.8, "verticalRatio": 8.1},
+    }
+
+    data = _payload(await app_with_activity_management.call_tool("get_activity", {"activity_id": 1}))
+
+    assert data["avg_ground_contact_balance_left_percent"] == 50.8
+    assert data["avg_vertical_ratio_percent"] == 8.1
+    assert "avg_power_balance_left_percent" not in data
+
+
+@pytest.mark.asyncio
+async def test_activity_lists_include_balance_metrics(app_with_activity_management, mock_garmin_client):
+    """List rows read the avg* variants of the balance keys"""
+    mock_garmin_client.get_activities.return_value = [
+        {"activityId": 1, "avgGroundContactBalance": 49.6, "avgVerticalRatio": 7.9},
+    ]
+
+    data = _payload(await app_with_activity_management.call_tool("get_activities", {}))
+
+    row = data["activities"][0]
+    assert row["avg_ground_contact_balance_left_percent"] == 49.6
+    assert row["avg_vertical_ratio_percent"] == 7.9
